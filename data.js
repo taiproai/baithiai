@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.set('view engine', 'ejs');
 
-// Kết nối MySQL
+// Kết nối MySQL đã cập nhật
 const db = mysql.createConnection({
     host: 'hera.dotvndns.com',
     user: 'shopcova6979_baiduthi',
