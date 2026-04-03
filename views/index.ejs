@@ -1,1 +1,869 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FPT Poly Đà Nẵng - Hệ thống Quản lý Thiết bị</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
 
+    <style>
+        :root { --fpt-orange: #F26F21; }
+        .bg-fpt { background-color: var(--fpt-orange); }
+        .text-fpt { color: var(--fpt-orange); }
+        .border-fpt { border-color: var(--fpt-orange); }
+        .active-nav { background-color: #fff3ec; color: var(--fpt-orange); border-right: 4px solid var(--fpt-orange); }
+        .active-nav-mobile { color: var(--fpt-orange); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 16px; margin-bottom: 8px; font-size: 14px;}
+        .chat-mine { background-color: var(--fpt-orange); color: white; margin-left: auto; border-bottom-right-radius: 4px;}
+        .chat-other { background-color: #f1f5f9; color: #334155; margin-right: auto; border-bottom-left-radius: 4px;}
+    </style>
+</head>
+<body class="bg-orange-50/30 h-screen flex flex-col overflow-hidden text-gray-800 font-sans">
+
+    <header class="bg-white shadow-sm border-b-2 border-fpt p-4 flex justify-between items-center z-40 relative">
+        <div class="flex items-center gap-3">
+            <div class="bg-fpt text-white font-bold px-3 py-1.5 rounded text-lg md:text-xl shadow-sm">FPT Polytechnic</div>
+            <span class="font-bold text-gray-700 hidden md:inline-block text-lg border-l-2 border-orange-200 pl-3">Hệ thống Quản lý Thiết bị</span>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div class="relative">
+                <button onclick="toggleNotif()" class="text-gray-500 hover:text-fpt relative p-2 transition" title="Thông báo">
+                    <i class="fa-solid fa-bell text-2xl"></i>
+                    <span id="notifBadge" class="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold hidden border-2 border-white shadow-sm">0</span>
+                </button>
+                <div id="notifDropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-orange-100 z-50 flex flex-col overflow-hidden">
+                    <div class="p-3 border-b border-orange-50 bg-orange-50/50 font-bold text-gray-700 flex justify-between items-center">
+                        <span>Thông báo</span>
+                        <button onclick="toggleNotif()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div id="notifList" class="overflow-y-auto max-h-80 p-2 flex flex-col gap-1"></div>
+                </div>
+            </div>
+
+            <div class="hidden md:flex items-center gap-3 border-l border-orange-100 pl-4">
+                <div class="text-right">
+                    <p id="userNameDisplay" class="font-bold text-sm text-gray-800"></p>
+                    <p id="userRoleDisplay" class="text-xs text-orange-600 font-medium uppercase"></p>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-fpt font-bold border border-orange-200">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+            </div>
+            <button onclick="logout()" class="text-gray-500 hover:text-red-500 bg-orange-50 p-2 rounded-lg transition border border-orange-100" title="Đăng xuất"><i class="fa-solid fa-right-from-bracket text-xl"></i></button>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden relative">
+        <aside class="w-64 bg-white shadow-[4px_0_24px_rgba(0,0,0,0.02)] hidden md:flex flex-col z-20 border-r border-orange-100">
+            <nav class="flex-1 mt-6 flex flex-col gap-2 px-4">
+                <button onclick="showTab('tabWorkspace', this)" class="nav-btn active-nav flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg text-gray-600 hover:bg-orange-50 transition font-medium"><i class="fa-solid fa-layer-group text-lg w-6 text-center"></i> Quản lý & Sử dụng</button>
+                
+                <button id="btnAdminMaintDesk" onclick="showTab('tabMaintenance', this)" class="nav-btn hidden flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg text-gray-600 hover:bg-orange-50 transition font-medium"><i class="fa-solid fa-screwdriver-wrench text-lg w-6 text-center"></i> Bảo trì & Sự cố</button>
+                
+                <button id="btnAdminDashDesk" onclick="showTab('tabDash', this)" class="nav-btn hidden flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg text-gray-600 hover:bg-orange-50 transition font-medium"><i class="fa-solid fa-chart-pie text-lg w-6 text-center"></i> Thống kê</button>
+                <button id="btnAdminUsersDesk" onclick="showTab('tabUsers', this)" class="nav-btn hidden flex items-center gap-3 w-full text-left px-4 py-3 rounded-lg text-gray-600 hover:bg-orange-50 transition font-medium"><i class="fa-solid fa-users text-lg w-6 text-center"></i> Quản lý User</button>
+            </nav>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 bg-orange-50/40 relative">
+            
+            <div id="tabWorkspace" class="tab-content animate-fade-in max-w-6xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">Không gian làm việc</h2>
+                
+                <div class="bg-white rounded-2xl shadow-sm border border-orange-100 p-6 mb-6 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-fpt"></div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-4 pl-2">Tìm kiếm & Phân loại</h3>
+                    <div class="flex flex-col md:flex-row gap-2 mb-2">
+                        <select id="assetCategoryFilter" onchange="filterAssets()" class="w-full md:w-1/4 p-3 bg-orange-50/50 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-400 focus:bg-white outline-none transition font-medium text-gray-700">
+                            <option value="all">Tất cả danh mục</option>
+                        </select>
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-search absolute left-3 top-3.5 text-orange-400"></i>
+                            <input type="text" id="scanCode" oninput="filterAssets()" class="w-full pl-10 p-3 bg-orange-50/50 border border-orange-200 rounded-lg focus:ring-2 focus:ring-orange-400 focus:bg-white outline-none transition" placeholder="Nhập mã QA hoặc tên thiết bị...">
+                        </div>
+                        <button onclick="startScanner()" class="bg-fpt text-white px-5 py-3 rounded-lg hover:bg-orange-600 shadow-md transition w-full md:w-auto font-medium"><i class="fa-solid fa-camera mr-1"></i> Quét mã QR</button>
+                        <input type="file" id="qrInputFile" accept="image/*" class="hidden" onchange="scanImage(event)">
+                        <button onclick="document.getElementById('qrInputFile').click()" class="bg-orange-100 text-orange-600 border border-orange-200 px-5 py-3 rounded-lg hover:bg-orange-200 transition w-full md:w-auto font-medium"><i class="fa-solid fa-image mr-1"></i> Tải ảnh QR</button>
+                    </div>
+                    <div id="reader" class="w-full hidden rounded-xl overflow-hidden shadow-inner border max-w-md mx-auto mt-4"></div>
+                </div>
+
+                <div class="md:bg-white md:rounded-2xl md:shadow-sm md:border border-orange-100 overflow-hidden">
+                    <div class="p-4 border-b border-orange-100 hidden md:flex justify-between items-center bg-orange-50/50">
+                        <h3 class="text-lg font-bold text-gray-800">Danh sách Thiết bị</h3>
+                        <button id="btnAddAsset" onclick="document.getElementById('addModal').classList.remove('hidden')" class="hidden bg-fpt text-white px-4 py-2 rounded-lg shadow-md hover:bg-orange-600 transition text-sm font-medium"><i class="fa-solid fa-plus"></i> Thêm mới</button>
+                    </div>
+                    <div class="md:hidden flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800">Danh sách Thiết bị</h3>
+                        <button id="btnAddAssetMob" onclick="document.getElementById('addModal').classList.remove('hidden')" class="hidden bg-fpt text-white px-4 py-1.5 rounded-lg shadow-md hover:bg-orange-600 transition text-sm font-medium"><i class="fa-solid fa-plus"></i> Thêm mới</button>
+                    </div>
+                    <div class="overflow-visible md:overflow-x-auto">
+                        <table class="w-full text-left block md:table border-collapse">
+                            <thead class="hidden md:table-header-group bg-orange-50/50 text-orange-800 text-sm uppercase">
+                                <tr>
+                                    <th class="p-4 border-b border-orange-100">Mã QA</th>
+                                    <th class="p-4 border-b border-orange-100">Tên thiết bị</th>
+                                    <th class="p-4 border-b border-orange-100">Loại / Phòng</th>
+                                    <th class="p-4 border-b border-orange-100">Trạng thái & Người mượn</th>
+                                    <th class="p-4 border-b border-orange-100 text-center w-64">Thao tác</th>
+                                    <th class="p-4 border-b border-orange-100 text-center w-32">Quản lý</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetTableBody" class="block md:table-row-group text-gray-700 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Bảo trì -->
+            <div id="tabMaintenance" class="tab-content hidden animate-fade-in max-w-6xl mx-auto">
+                <div class="flex items-center gap-3 mb-6">
+                    <i class="fa-solid fa-screwdriver-wrench text-3xl text-emerald-500"></i>
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">Quản lý yêu cầu bảo trì</h2>
+                        <p class="text-sm text-gray-500">Tiếp nhận và xử lý các thông báo hỏng hóc từ nhân viên.</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-emerald-100 overflow-hidden">
+                    <div class="overflow-x-auto p-4">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-emerald-50/50 text-emerald-800 text-sm uppercase rounded-lg border-b border-emerald-100">
+                                <tr>
+                                    <th class="p-4 font-semibold">Thiết bị lỗi</th>
+                                    <th class="p-4 font-semibold">Người báo cáo</th>
+                                    <th class="p-4 font-semibold">Mô tả lỗi</th>
+                                    <th class="p-4 font-semibold">Trạng thái</th>
+                                    <th class="p-4 font-semibold text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maintenanceTableBody" class="text-gray-700 text-sm divide-y divide-emerald-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard -->
+            <div id="tabDash" class="tab-content hidden animate-fade-in max-w-6xl mx-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">Thống kê & Phân tích</h2>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100 md:col-span-1 flex flex-col justify-center items-center">
+                        <h3 class="text-md font-bold text-gray-700 mb-2 w-full text-left">Tỷ lệ Trạng thái</h3>
+                        <div class="w-full h-48 relative"><canvas id="statusChart"></canvas></div>
+                    </div>
+                    <div class="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center text-2xl z-10"><i class="fa-solid fa-server"></i></div><div class="z-10"><p class="text-sm text-gray-500 font-medium mb-1">Tổng thiết bị</p><h3 class="text-3xl font-bold" id="dashTotal">0</h3></div></div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-emerald-100 flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center text-2xl z-10"><i class="fa-solid fa-circle-check"></i></div><div class="z-10"><p class="text-sm text-gray-500 font-medium mb-1">Đang sử dụng</p><h3 class="text-3xl font-bold" id="dashInUse">0</h3></div></div>
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-red-100 flex items-center gap-4"><div class="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center text-2xl z-10"><i class="fa-solid fa-wrench"></i></div><div class="z-10"><p class="text-sm text-gray-500 font-medium mb-1">Hỏng / Bảo trì</p><h3 class="text-3xl font-bold" id="dashBroken">0</h3></div></div>
+                    </div>
+                </div>
+
+                <!-- TOP SỬ DỤNG VÀ THIẾT BỊ -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
+                        <h3 class="text-md font-bold text-gray-700 mb-4 border-l-4 border-yellow-500 pl-2"><i class="fa-solid fa-laptop text-yellow-500 mr-1"></i> Thiết Bị Được Mượn Nhiều Nhất</h3>
+                        <div id="topAssetsList" class="space-y-3">
+                            <div class="text-center text-gray-400 text-sm py-4 italic"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Đang tải dữ liệu...</div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-100">
+                        <h3 class="text-md font-bold text-gray-700 mb-4 border-l-4 border-blue-500 pl-2"><i class="fa-solid fa-user-check text-blue-500 mr-1"></i> Top Người Dùng Tích Cực</h3>
+                        <div id="topUsersList" class="space-y-3">
+                            <div class="text-center text-gray-400 text-sm py-4 italic"><i class="fa-solid fa-spinner fa-spin mr-1"></i> Đang tải dữ liệu...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-orange-100 flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div class="text-center md:text-left">
+                        <h3 class="text-lg font-bold text-gray-800 mb-1">Báo cáo Trạng thái & Lịch sử</h3>
+                        <p class="text-sm text-gray-500">Trích xuất dữ liệu vận hành và lịch sử mượn/trả trong 30 ngày qua.</p>
+                    </div>
+                    <div class="flex flex-col md:flex-row gap-3">
+                        <button onclick="exportHistoryExcel()" class="bg-emerald-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-emerald-600 shadow-md transition"><i class="fa-solid fa-file-excel"></i> Xuất Excel (30 Ngày)</button>
+                        <button onclick="exportPDF()" class="bg-red-500 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-red-600 shadow-md transition" id="btnExportPdf"><i class="fa-solid fa-file-pdf"></i> Xuất PDF Lịch Sử</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="tabUsers" class="tab-content hidden animate-fade-in max-w-6xl mx-auto">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800">Quản lý User</h2>
+                <div class="bg-white rounded-2xl shadow-sm border border-orange-100 overflow-hidden">
+                    <div class="p-4 border-b flex justify-between items-center bg-orange-50/50"><h3 class="text-lg font-bold">Danh sách Tài khoản</h3><button onclick="document.getElementById('addUserModal').classList.remove('hidden')" class="bg-fpt text-white px-4 py-2 rounded-lg text-sm font-medium"><i class="fa-solid fa-user-plus"></i> Thêm User mới</button></div>
+                    <div class="overflow-x-auto p-4"><table class="w-full text-left border-collapse"><thead class="bg-orange-50/50 text-orange-800 text-sm uppercase rounded-lg"><tr><th class="p-4 border-b border-orange-100">ID</th><th class="p-4 border-b border-orange-100">Tài khoản</th><th class="p-4 border-b border-orange-100">Phân quyền</th><th class="p-4 border-b border-orange-100">Phòng ban</th><th class="p-4 border-b border-orange-100 text-center">Thao tác</th></tr></thead><tbody id="userTableBody" class="text-gray-700 text-sm divide-y divide-orange-50"></tbody></table></div>
+                </div>
+            </div>
+        </main>
+        
+        <nav class="md:hidden fixed bottom-0 w-full bg-white border-t border-orange-100 flex justify-around p-2 z-40 shadow-[0_-5px_15px_-5px_rgba(242,111,33,0.1)]" id="mobileNav">
+            <button onclick="showTab('tabWorkspace', this, true)" class="nav-btn-mob active-nav-mobile flex flex-col items-center p-2 w-full"><i class="fa-solid fa-layer-group text-xl mb-1"></i><span class="text-[10px]">Quản lý</span></button>
+            <button id="btnAdminMaintMob" onclick="showTab('tabMaintenance', this, true)" class="nav-btn-mob hidden flex flex-col items-center p-2 text-gray-400 w-full"><i class="fa-solid fa-screwdriver-wrench text-xl mb-1"></i><span class="text-[10px]">Bảo trì</span></button>
+            <button id="btnAdminDashMob" onclick="showTab('tabDash', this, true)" class="nav-btn-mob hidden flex flex-col items-center p-2 text-gray-400 w-full"><i class="fa-solid fa-chart-pie text-xl mb-1"></i><span class="text-[10px]">Thống kê</span></button>
+            <button id="btnAdminUsersMob" onclick="showTab('tabUsers', this, true)" class="nav-btn-mob hidden flex flex-col items-center p-2 text-gray-400 w-full"><i class="fa-solid fa-users text-xl mb-1"></i><span class="text-[10px]">Users</span></button>
+        </nav>
+    </div>
+
+    <!-- Modal Repair Chat -->
+    <div id="repairChatModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl w-full max-w-lg relative shadow-2xl border flex flex-col h-[70vh]">
+            <div id="chatModalHeader" class="p-4 border-b flex justify-between items-center rounded-t-3xl transition-colors">
+                <h3 class="text-lg font-bold text-gray-800"><i id="chatIcon" class="mr-2"></i> <span id="chatAssetCode" class="font-mono"></span></h3>
+                <button onclick="closeChat()" class="text-gray-400 hover:text-gray-800"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div id="repairChatBox" class="flex-1 p-4 overflow-y-auto flex flex-col gap-3 bg-gray-50"></div>
+            <div class="p-4 border-t bg-white rounded-b-3xl flex gap-2">
+                <input type="text" id="repairChatInput" class="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" placeholder="...">
+                <button id="btnSendChat" onclick="sendRepairMessage()" class="px-5 py-3 rounded-xl font-bold transition"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="detailModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-white p-6 md:p-8 rounded-3xl shadow-2xl w-full max-w-2xl relative">
+            <button onclick="document.getElementById('detailModal').classList.add('hidden')" class="absolute top-4 right-4 text-orange-300 hover:text-orange-600 bg-orange-50 rounded-full w-8 h-8 flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+            <h3 class="text-xl font-bold mb-6 border-l-4 border-fpt pl-3">Chi tiết Thiết bị</h3>
+            <div class="flex flex-col md:flex-row gap-6">
+                <div class="flex-1 space-y-3 text-sm">
+                    <p><span class="font-semibold text-gray-500 w-24 inline-block">Mã QA:</span> <span id="detQa" class="font-mono font-bold bg-gray-100 px-2 py-0.5 rounded"></span></p>
+                    <p><span class="font-semibold text-gray-500 w-24 inline-block">Tên thiết bị:</span> <span id="detName" class="font-medium"></span></p>
+                    <p><span class="font-semibold text-gray-500 w-24 inline-block">Loại/Phòng:</span> <span id="detTypeRoom"></span></p>
+                    <p><span class="font-semibold text-gray-500 w-24 inline-block">Trạng thái:</span> <span id="detStatus"></span></p>
+                    <div class="bg-orange-50/50 p-3 rounded-lg border border-orange-100 mt-2"><span class="font-semibold text-orange-600 block mb-1"><i class="fa-solid fa-note-sticky"></i> Ghi chú:</span><span id="detNote" class="text-gray-700 italic"></span></div>
+                </div>
+                <div class="flex flex-col items-center justify-center md:border-l border-gray-100 md:pl-6">
+                    <div id="detQRCode" class="p-3 bg-white border border-gray-200 rounded-xl mb-4"></div>
+                    <div class="flex gap-2 w-full max-w-[200px]">
+                        <button onclick="downloadQR()" class="flex-1 bg-orange-50 text-orange-600 py-2 rounded-lg text-xs font-bold hover:bg-orange-100"><i class="fa-solid fa-download"></i> Tải về</button>
+                        <button onclick="printQR()" class="flex-1 bg-blue-50 text-blue-600 py-2 rounded-lg text-xs font-bold hover:bg-blue-100"><i class="fa-solid fa-print"></i> In mã</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="actionModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div class="bg-white rounded-3xl p-6 w-full max-w-sm relative"><button onclick="document.getElementById('actionModal').classList.add('hidden')" class="absolute top-4 right-4 text-orange-300"><i class="fa-solid fa-xmark"></i></button><h3 class="text-xl font-bold mb-2" id="actionModalTitle">Xác nhận</h3><p class="text-sm text-gray-500 mb-4" id="actionModalDesc"></p><input type="hidden" id="actionQaCode"><input type="hidden" id="actionType"><div class="space-y-4"><input type="text" id="actionNewRoom" class="hidden w-full p-3 bg-orange-50/50 rounded-xl outline-none" placeholder="Phòng chuyển đến"><div id="expectedReturnContainer" class="hidden flex flex-col gap-1"><label class="text-sm font-semibold pl-1">Dự kiến trả</label><input type="datetime-local" id="actionExpectedReturn" class="w-full p-3 bg-orange-50/50 rounded-xl outline-none"></div><textarea id="actionNote" rows="3" class="w-full p-3 bg-orange-50/50 rounded-xl outline-none" placeholder="Nhập ghi chú..."></textarea><button onclick="submitAction()" id="btnSubmitAction" class="w-full bg-fpt text-white p-3 rounded-xl font-bold">Xác nhận</button></div></div></div>
+    
+    <div id="addModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div class="bg-white rounded-3xl p-8 w-full max-w-lg relative"><button onclick="document.getElementById('addModal').classList.add('hidden')" class="absolute top-4 right-4"><i class="fa-solid fa-xmark"></i></button><h3 class="text-xl font-bold mb-6 border-l-4 border-fpt pl-3">Thêm mới thiết bị</h3><div class="space-y-4"><input type="text" id="newQa" placeholder="Mã QA" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><input type="text" id="newName" placeholder="Tên thiết bị" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><div class="grid grid-cols-2 gap-4"><input type="text" id="newType" placeholder="Loại" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><input type="text" id="newRoom" placeholder="Phòng" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"></div><button onclick="addAsset()" class="w-full bg-fpt text-white p-3.5 rounded-xl font-bold">Thêm thiết bị</button></div></div></div>
+    
+    <div id="editModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div class="bg-white rounded-3xl p-8 w-full max-w-lg relative"><button onclick="document.getElementById('editModal').classList.add('hidden')" class="absolute top-4 right-4"><i class="fa-solid fa-xmark"></i></button><h3 class="text-xl font-bold mb-6 border-l-4 border-fpt pl-3">Chỉnh sửa thiết bị</h3><div class="space-y-4"><input type="text" id="editQa" disabled class="w-full p-3.5 bg-gray-100 rounded-xl font-mono"><input type="text" id="editName" placeholder="Tên thiết bị" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><div class="grid grid-cols-2 gap-4"><input type="text" id="editType" placeholder="Loại" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><input type="text" id="editRoom" placeholder="Phòng" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"></div><select id="editStatus" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><option value="Sẵn sàng">Sẵn sàng</option><option value="Đang sử dụng">Đang sử dụng</option><option value="Hỏng">Hỏng</option><option value="Bảo trì">Bảo trì</option></select><button onclick="saveEdit()" class="w-full bg-blue-500 text-white p-3.5 rounded-xl font-bold">Lưu thay đổi</button></div></div></div>
+    
+    <div id="addUserModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div class="bg-white rounded-3xl p-8 w-full max-w-sm relative"><button onclick="document.getElementById('addUserModal').classList.add('hidden')" class="absolute top-4 right-4 text-orange-300"><i class="fa-solid fa-xmark"></i></button><h3 class="text-xl font-bold mb-6 border-l-4 border-fpt pl-3">Thêm User mới</h3><div class="space-y-4"><input type="text" id="newUsername" placeholder="Tên đăng nhập" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><input type="password" id="newPassword" placeholder="Mật khẩu" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><select id="newRole" onchange="document.getElementById('deptContainer').style.display = this.value === 'admin' ? 'none' : 'block'" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><option value="staff">Nhân viên</option><option id="optManager" value="manager">Tổ trưởng</option><option id="optAdmin" value="admin">Quản trị viên</option><option value="tech">Kỹ thuật viên (IT)</option></select><div id="deptContainer"><input type="text" id="newDepartment" placeholder="Phòng ban" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"></div><button onclick="addUser()" class="w-full bg-fpt text-white p-3.5 rounded-xl font-bold">Tạo User</button></div></div></div>
+
+    <div id="editUserModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div class="bg-white rounded-3xl p-8 w-full max-w-sm relative"><button onclick="document.getElementById('editUserModal').classList.add('hidden')" class="absolute top-4 right-4 text-orange-300"><i class="fa-solid fa-xmark"></i></button><h3 class="text-xl font-bold mb-6 border-l-4 border-fpt pl-3">Cập nhật Quyền User</h3><div class="space-y-4"><input type="hidden" id="editUserId"><input type="text" id="editUserUsername" disabled class="w-full p-3.5 bg-gray-100 rounded-xl font-mono text-gray-500"><select id="editUserRole" onchange="document.getElementById('editUserDeptContainer').style.display = this.value === 'admin' ? 'none' : 'block'" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"><option value="staff">Nhân viên</option><option value="manager">Tổ trưởng</option><option value="admin">Quản trị viên</option><option value="tech">Kỹ thuật viên (IT)</option></select><div id="editUserDeptContainer"><input type="text" id="editUserDepartment" placeholder="Phòng ban" class="w-full p-3.5 bg-orange-50/50 rounded-xl outline-none"></div><button onclick="saveEditUser()" class="w-full bg-blue-500 text-white p-3.5 rounded-xl font-bold">Lưu thay đổi</button></div></div></div>
+
+    <!-- MAIN SCRIPT -->
+    <script>
+        let currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        let html5QrcodeScanner = null;
+        let allAssets = [];
+        let historyData = [];
+        let statusChartInstance = null;
+        let checkNotificationInterval = null;
+        let notifiedAssets = new Set();
+        
+        let currentChatQaCode = null;
+        let currentChatType = 'general'; 
+        const socket = io(); 
+
+        if (!currentUser) { 
+            window.location.href = '/login'; 
+        } else {
+            document.getElementById('userNameDisplay').innerText = currentUser.username;
+            let roleName = "Nhân viên"; 
+            if(currentUser.role === 'admin') roleName = "Quản trị viên"; 
+            if(currentUser.role === 'manager') roleName = "Tổ trưởng";
+            if(currentUser.role === 'tech') roleName = "Kỹ thuật viên";
+            document.getElementById('userRoleDisplay').innerText = roleName;
+            
+            if(currentUser.role === 'admin') { 
+                document.getElementById('btnAdminDashDesk').classList.remove('hidden'); 
+                document.getElementById('btnAdminDashMob').classList.remove('hidden'); 
+                loadDashboard(); 
+            }
+            if(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'tech') {
+                document.getElementById('btnAdminMaintDesk').classList.remove('hidden'); 
+                document.getElementById('btnAdminMaintMob').classList.remove('hidden');
+                
+                if (currentUser.role !== 'tech') {
+                    document.getElementById('btnAdminUsersDesk').classList.remove('hidden'); 
+                    document.getElementById('btnAdminUsersMob').classList.remove('hidden');
+                    document.getElementById('btnAddAsset').classList.remove('hidden'); 
+                    document.getElementById('btnAddAssetMob').classList.remove('hidden');
+                    if(currentUser.role === 'manager') { 
+                        document.getElementById('optManager').classList.add('hidden'); 
+                        document.getElementById('optAdmin').classList.add('hidden'); 
+                    }
+                    loadUsers();
+                }
+            }
+
+            const savedTab = localStorage.getItem('currentTab') || 'tabWorkspace';
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+            const activeTabEl = document.getElementById(savedTab);
+            if(activeTabEl) activeTabEl.classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('active-nav');
+                b.style.borderRight = 'none';
+                if(b.getAttribute('onclick') && b.getAttribute('onclick').includes(savedTab)) {
+                    b.classList.add('active-nav');
+                }
+            });
+
+            document.querySelectorAll('.nav-btn-mob').forEach(b => {
+                b.classList.remove('active-nav-mobile'); 
+                b.classList.add('text-gray-400');
+                if(b.getAttribute('onclick') && b.getAttribute('onclick').includes(savedTab)) {
+                    b.classList.add('active-nav-mobile'); 
+                    b.classList.remove('text-gray-400');
+                }
+            });
+
+            loadAssets();
+            setupNotifications();
+            
+            document.getElementById('repairChatInput').addEventListener('keypress', function(e) {
+                if(e.key === 'Enter') sendRepairMessage();
+            });
+        }
+
+        function showTab(tabId, element, isMobile = false) { 
+            localStorage.setItem('currentTab', tabId);
+            
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden')); 
+            document.getElementById(tabId).classList.remove('hidden'); 
+            
+            if(isMobile) { 
+                document.querySelectorAll('.nav-btn-mob').forEach(b => { b.classList.remove('active-nav-mobile'); b.classList.add('text-gray-400'); }); 
+                element.classList.add('active-nav-mobile'); element.classList.remove('text-gray-400'); 
+            } else { 
+                document.querySelectorAll('.nav-btn').forEach(b => { b.classList.remove('active-nav'); b.style.borderRight = 'none'; }); 
+                element.classList.add('active-nav'); 
+            } 
+        }
+
+        function openChat(qa_code, chatType = 'general') {
+            currentChatQaCode = qa_code;
+            currentChatType = chatType;
+            let displayTitle = chatType === 'tech' ? `Kênh Nội Bộ (Admin & IT): ${qa_code}` : `Ticket Sự cố chung: ${qa_code}`;
+            document.getElementById('chatAssetCode').innerText = displayTitle;
+
+            const headerEl = document.getElementById('chatModalHeader');
+            const iconEl = document.getElementById('chatIcon');
+            const codeEl = document.getElementById('chatAssetCode');
+            const sendBtn = document.getElementById('btnSendChat');
+            
+            if (chatType === 'tech') {
+                headerEl.className = "p-4 border-b border-purple-200 flex justify-between items-center bg-purple-50 rounded-t-3xl transition-colors";
+                iconEl.className = "fa-solid fa-user-shield text-purple-600 mr-2";
+                codeEl.className = "text-purple-700 font-mono";
+                sendBtn.className = "bg-purple-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-purple-700 transition";
+            } else {
+                headerEl.className = "p-4 border-b border-blue-200 flex justify-between items-center bg-blue-50 rounded-t-3xl transition-colors";
+                iconEl.className = "fa-solid fa-ticket text-blue-600 mr-2";
+                codeEl.className = "text-blue-700 font-mono";
+                sendBtn.className = "bg-blue-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-blue-700 transition";
+            }
+
+            document.getElementById('repairChatInput').disabled = false;
+            document.getElementById('repairChatInput').placeholder = chatType === 'tech' ? "Nhập tin nhắn trao đổi nội bộ..." : "Nhập nội dung trao đổi sự cố...";
+            document.getElementById('repairChatModal').classList.remove('hidden');
+            let roomCode = chatType === 'tech' ? qa_code + '_tech' : qa_code;
+            loadRepairChat(roomCode);
+        }
+        
+        function closeChat() { document.getElementById('repairChatModal').classList.add('hidden'); currentChatQaCode = null; }
+        
+        function sendRepairMessage() {
+            const msgInput = document.getElementById('repairChatInput'); const message = msgInput.value.trim();
+            if(!message || !currentChatQaCode) return;
+            let roomCode = currentChatType === 'tech' ? currentChatQaCode + '_tech' : currentChatQaCode;
+            socket.emit("sendMessage", { qa_code: roomCode, sender: currentUser.username, role: currentUser.role, message: message });
+            msgInput.value = '';
+        }
+        
+        function loadRepairChat(roomCode) {
+            fetch(`/api/messages/${roomCode}`).then(r => r.json()).then(data => {
+                const box = document.getElementById('repairChatBox'); if(!box) return;
+                box.innerHTML = '<div class="text-center text-xs text-gray-400 my-2">Bắt đầu trao đổi...</div>';
+                if(Array.isArray(data)) {
+                    let startIndex = 0;
+                    if (!roomCode.endsWith('_tech')) {
+                        for (let i = data.length - 1; i >= 0; i--) {
+                            if (data[i].role === 'system' && data[i].message.includes('đã báo hỏng thiết bị')) { startIndex = i; break; }
+                        }
+                    }
+                    const sessionData = data.slice(startIndex);
+                    sessionData.forEach(msg => appendRepairMessage(msg));
+                    const lastMsg = sessionData[sessionData.length - 1];
+                    if(lastMsg && lastMsg.role === 'system' && lastMsg.message.includes('sửa chữa thành công')) {
+                        document.getElementById('repairChatInput').disabled = true;
+                        document.getElementById('repairChatInput').placeholder = "Sự cố đã được giải quyết.";
+                    }
+                }
+                setTimeout(() => { box.scrollTop = box.scrollHeight; }, 100);
+            }).catch(e => console.log('Lỗi tải chat lỗi', e));
+        }
+
+        function appendRepairMessage(data) {
+            const box = document.getElementById('repairChatBox'); if(!box) return;
+            const isMine = data.sender === currentUser.username;
+            const timeStr = new Date(data.timestamp || new Date()).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
+            let rTag = data.role === 'admin' ? ' - Admin' : (data.role === 'manager' ? ' - Tổ trưởng' : (data.role === 'tech' ? ' - Kỹ thuật' : ''));
+            if(data.role === 'system') {
+                box.innerHTML += `<div class="text-center text-xs text-orange-500 font-semibold my-2 italic p-2 bg-orange-50 rounded-lg mx-auto max-w-[90%]">${data.message}</div>`;
+                box.scrollTop = box.scrollHeight; return;
+            }
+            
+            let myBgClass = currentChatType === 'tech' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white';
+            let roleColorClass = currentChatType === 'tech' ? 'text-purple-500' : 'text-blue-500';
+
+            box.innerHTML += `<div class="flex flex-col ${isMine ? 'items-end' : 'items-start'} w-full"><span class="text-[10px] text-gray-500 font-bold mb-0.5 ml-1">${data.sender} <span class="${roleColorClass}">${rTag}</span></span><div class="max-w-[80%] p-2.5 rounded-xl text-sm ${isMine ? myBgClass + ' rounded-br-none shadow' : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'}">${data.message}</div><span class="text-[9px] text-gray-400 mt-0.5 mx-1">${timeStr}</span></div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        socket.on("receiveMessage", (data) => {
+            if (data.qa_code === 'GLOBAL') return;
+            let activeRoomCode = currentChatQaCode ? (currentChatType === 'tech' ? currentChatQaCode + '_tech' : currentChatQaCode) : null;
+            if(activeRoomCode === data.qa_code) {
+                appendRepairMessage(data);
+                if (data.role === 'system' && data.message.includes('sửa chữa thành công')) {
+                    document.getElementById('repairChatInput').disabled = true; document.getElementById('repairChatInput').value = ''; document.getElementById('repairChatInput').placeholder = "Sự cố đã được giải quyết.";
+                    setTimeout(() => { closeChat(); alert('Thiết bị đã được sửa xong. Ticket hỗ trợ tự động đóng lại!'); }, 1500);
+                }
+            } else {
+                let isTechMsg = data.qa_code.endsWith('_tech'); let baseQaCode = isTechMsg ? data.qa_code.replace('_tech', '') : data.qa_code;
+                const item = allAssets.find(a => a.qa_code === baseQaCode);
+                if(item && (item.status === 'Hỏng' || item.status === 'Bảo trì')) {
+                    const notifList = document.getElementById('notifList'); const notifBadge = document.getElementById('notifBadge'); let added = false;
+                    if (isTechMsg && (currentUser.role === 'admin' || currentUser.role === 'tech')) {
+                        notifList.innerHTML = `<div onclick="openChat('${baseQaCode}', 'tech')" class="p-2 bg-purple-50 cursor-pointer rounded text-xs border border-purple-100 hover:bg-purple-100"><i class="fa-solid fa-user-gear text-purple-500 mr-1"></i> Tin nhắn Kỹ thuật từ: <b>${baseQaCode}</b></div>` + notifList.innerHTML; added = true;
+                    } else if (!isTechMsg && (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'tech' || item.current_borrower === currentUser.username)) {
+                        notifList.innerHTML = `<div onclick="openChat('${baseQaCode}', 'general')" class="p-2 bg-blue-50 cursor-pointer rounded text-xs border border-blue-100 hover:bg-blue-100"><i class="fa-solid fa-comment-dots text-blue-500 mr-1"></i> Có tin nhắn mới từ Ticket chung: <b>${baseQaCode}</b></div>` + notifList.innerHTML; added = true;
+                    }
+                    if (added) { notifBadge.innerText = parseInt(notifBadge.innerText || 0) + 1; notifBadge.classList.remove('hidden'); }
+                }
+            }
+        });
+
+        function renderTable(dataToRender) {
+            const tbody = document.getElementById('assetTableBody'); if(!tbody) return; tbody.innerHTML = '';
+            if(dataToRender.length === 0) { tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-gray-500 font-medium">Không tìm thấy thiết bị nào!</td></tr>`; return; }
+            dataToRender.forEach(item => {
+                let displayStatus = item.status; let statusColor = "text-gray-600"; let borrowerInfo = '';
+                if (item.status === 'Đang sử dụng' && item.borrow_time) {
+                    const borrowDate = new Date(item.borrow_time); const timeStr = borrowDate.toLocaleString('vi-VN', { hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit' });
+                    let expectedReturnDate = item.expected_return ? new Date(item.expected_return) : new Date(borrowDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+                    let timeDiff = expectedReturnDate.getTime() - new Date().getTime(); let daysOverdue = Math.floor(-timeDiff / (1000 * 60 * 60 * 24)); 
+                    let noteStr = item.borrow_note ? `<br><span class="text-xs text-orange-600 font-medium mt-1 flex items-start gap-1"><i class="fa-solid fa-comment-dots mt-0.5"></i> Ghi chú: ${item.borrow_note}</span>` : '';
+                    let reserveStr = item.reservations_count > 0 ? `<br><span class="text-xs text-indigo-600 font-bold mt-1 flex items-start gap-1"><i class="fa-solid fa-calendar-check mt-0.5"></i> Có ${item.reservations_count} người Đặt lịch</span>` : '';
+                    borrowerInfo = `<br><span class="text-xs text-gray-500 font-normal mt-1 block"><i class="fa-solid fa-user-clock text-orange-400"></i> ${item.current_borrower} (Lúc: ${timeStr})</span>${noteStr}${reserveStr}`;
+                    
+                    if (timeDiff < 0 && daysOverdue >= 3) { displayStatus = `Mất (Quá hạn ${daysOverdue} ngày)`; statusColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded-md inline-block border border-red-100"; } 
+                    else if (timeDiff < 0) { displayStatus = `Quá hạn (${daysOverdue === 0 ? "hôm nay" : daysOverdue + " ngày"})`; statusColor = "text-orange-600 font-bold bg-orange-50 px-2 py-1 rounded-md inline-block border border-orange-200"; } 
+                    else { displayStatus = `Đang mượn (Đến ${expectedReturnDate.toLocaleString('vi-VN', { hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit' })})`; statusColor = "text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-md inline-block border border-blue-100"; }
+                } else if (item.status === 'Chờ duyệt') { statusColor = "text-yellow-600 font-bold bg-yellow-50 px-2 py-1 rounded-md inline-block border border-yellow-200"; displayStatus = "Đang chờ duyệt"; } 
+                else if (item.status === 'Sẵn sàng') { statusColor = "text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md inline-block border border-emerald-100"; } 
+                else if (item.status === 'Hỏng' || item.status === 'Bảo trì') { statusColor = "text-red-600 font-bold bg-red-50 px-2 py-1 rounded-md inline-block border border-red-100"; }
+
+                let actionHTML = '';
+                if (currentUser.role !== 'tech') {
+                    if (item.status === 'Sẵn sàng') { actionHTML += `<button onclick="openActionModal('${item.qa_code}', 'Mượn')" class="w-full md:w-auto bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-md hover:bg-blue-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap"><i class="fa-solid fa-arrow-right-to-bracket"></i> Mượn</button>`; } 
+                    else if (item.status === 'Chờ duyệt') {
+                        if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+                            actionHTML += `<button onclick="approveRequest('${item.qa_code}', 'approve')" class="w-full md:w-auto bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-md hover:bg-emerald-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap md:mr-1 mb-1 md:mb-0"><i class="fa-solid fa-check"></i> Duyệt</button>`;
+                            actionHTML += `<button onclick="approveRequest('${item.qa_code}', 'reject')" class="w-full md:w-auto bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md hover:bg-red-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap"><i class="fa-solid fa-xmark"></i> T.chối</button>`;
+                        } else actionHTML += `<div class="flex flex-col gap-1 w-full"><span class="text-xs text-yellow-600 font-semibold italic flex items-center justify-center"><i class="fa-solid fa-hourglass-half mr-1"></i> Chờ duyệt</span><button onclick="openActionModal('${item.qa_code}', 'Đăng ký mượn')" class="w-full bg-purple-50 text-purple-600 border border-purple-200 px-3 py-1.5 rounded-md hover:bg-purple-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap"><i class="fa-solid fa-calendar-plus"></i> Đặt lịch trước</button></div>`;
+                    } else if (item.status === 'Đang sử dụng') {
+                        if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.username === item.current_borrower) { actionHTML += `<button onclick="openActionModal('${item.qa_code}', 'Trả')" class="w-full md:w-auto bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-md hover:bg-emerald-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap"><i class="fa-solid fa-arrow-right-from-bracket"></i> Trả</button>`; } 
+                        else actionHTML += `<button onclick="openActionModal('${item.qa_code}', 'Đăng ký mượn')" class="w-full md:w-auto bg-purple-50 text-purple-600 border border-purple-200 px-3 py-1.5 rounded-md hover:bg-purple-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1"><i class="fa-solid fa-calendar-plus"></i> Đặt lịch trước</button>`;
+                    }
+                    if (item.status !== 'Hỏng' && item.status !== 'Bảo trì' && item.status !== 'Chờ duyệt') {
+                        actionHTML += `<button onclick="openActionModal('${item.qa_code}', 'Báo hỏng')" class="w-full md:w-auto bg-red-50 text-red-600 border border-red-200 px-3 py-1.5 rounded-md hover:bg-red-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap md:ml-1 mt-1 md:mt-0"><i class="fa-solid fa-triangle-exclamation"></i> Báo lỗi</button>`;
+                    }
+                }
+                if (item.status === 'Hỏng' || item.status === 'Bảo trì') {
+                    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'tech' || item.current_borrower === currentUser.username) { 
+                        actionHTML += `<button onclick="openChat('${item.qa_code}', 'general')" class="w-full md:w-auto bg-blue-50 text-blue-600 border border-blue-200 px-3 py-1.5 rounded-md hover:bg-blue-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1 md:mt-0 md:mr-1" title="Ticket hỏi thông tin sự cố"><i class="fa-solid fa-comments"></i> Ticket Sự Cố</button>`; 
+                    }
+                    if (currentUser.role === 'admin' || currentUser.role === 'tech') {
+                        actionHTML += `<button onclick="openChat('${item.qa_code}', 'tech')" class="w-full md:w-auto bg-purple-50 text-purple-600 border border-purple-200 px-3 py-1.5 rounded-md hover:bg-purple-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1 md:mt-0 md:mr-1" title="Kênh Kỹ thuật trao đổi riêng với Admin"><i class="fa-solid fa-user-shield"></i> Chat Nội bộ IT</button>`;
+                    }
+
+                    if(currentUser.role === 'admin') {
+                        if (item.status === 'Hỏng') { actionHTML += `<button onclick="markAsFixing('${item.qa_code}')" class="w-full md:w-auto bg-orange-50 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-md hover:bg-orange-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1"><i class="fa-solid fa-tools"></i> Đang sửa</button>`; }
+                        actionHTML += `<button onclick="markAsFixed('${item.qa_code}')" class="w-full md:w-auto bg-indigo-50 text-indigo-600 border border-indigo-200 px-3 py-1.5 rounded-md hover:bg-indigo-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1 md:ml-1"><i class="fa-solid fa-check-double"></i> Đã xong</button>`;
+                    } else if (currentUser.role === 'tech') {
+                        if (item.status === 'Hỏng') { actionHTML += `<button onclick="markAsFixing('${item.qa_code}')" class="w-full md:w-auto bg-orange-50 text-orange-600 border border-orange-200 px-3 py-1.5 rounded-md hover:bg-orange-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1"><i class="fa-solid fa-tools"></i> Tiếp nhận sửa</button>`; } 
+                        else if (item.status === 'Bảo trì') { actionHTML += `<button onclick="reportFixed('${item.qa_code}')" class="w-full md:w-auto bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-md hover:bg-emerald-500 hover:text-white transition-all text-xs font-bold whitespace-nowrap mt-1"><i class="fa-solid fa-flag-checkered"></i> Báo cáo Xong</button>`; }
+                    } else { actionHTML += `<span class="text-xs text-red-500 font-semibold flex items-center justify-center mt-2 border border-red-200 bg-red-50 py-1.5 rounded-md w-full md:w-auto px-2"><i class="fa-solid fa-ban mr-1"></i> ${item.status === 'Hỏng' ? 'Chờ xử lý' : 'Đang sửa chữa'}</span>`; }
+                }
+
+                let adminHTML = `<button onclick="showAssetDetails('${item.qa_code}')" class="flex-1 md:flex-none text-gray-500 hover:text-fpt bg-orange-50 md:bg-transparent py-1.5 rounded transition" title="Chi tiết"><i class="fa-solid fa-circle-info"></i></button>`;
+                if(currentUser.role === 'admin' || currentUser.role === 'manager') {
+                    adminHTML += `<button onclick="openEdit('${item.qa_code}')" class="flex-1 md:flex-none text-blue-500 hover:text-blue-700 bg-blue-50 md:bg-transparent py-1.5 rounded transition" title="Sửa"><i class="fa-solid fa-pen-to-square"></i></button>`;
+                    adminHTML += `<button onclick="deleteAsset('${item.qa_code}')" class="flex-1 md:flex-none text-red-500 hover:text-red-700 bg-red-50 md:bg-transparent py-1.5 rounded transition" title="Xóa"><i class="fa-solid fa-trash"></i></button>`;
+                }
+                tbody.innerHTML += `<tr class="flex flex-col md:table-row bg-white md:bg-transparent rounded-2xl border border-orange-100 md:border-b hover:bg-orange-50/80 transition"><td class="p-3 md:p-4 flex md:table-cell justify-between items-center border-b border-dashed border-orange-100 md:border-none"><span class="md:hidden text-xs font-bold text-gray-400 uppercase">Mã QA</span><span class="font-mono font-bold">${item.qa_code}</span></td><td class="p-3 md:p-4 flex md:table-cell justify-between items-center border-b border-dashed border-orange-100 md:border-none"><span class="md:hidden text-xs font-bold text-gray-400 uppercase">Tên</span><span class="font-medium">${item.name}</span></td><td class="p-3 md:p-4 flex md:table-cell justify-between items-center border-b border-dashed border-orange-100 md:border-none"><span class="md:hidden text-xs font-bold text-gray-400 uppercase">Loại/Phòng</span><div class="text-right md:text-left text-gray-500">${item.type} <br class="hidden md:block"><span class="text-xs text-orange-500 font-medium"><i class="fa-solid fa-location-dot"></i> ${item.room}</span></div></td><td class="p-3 md:p-4 flex md:table-cell justify-between items-center border-b border-dashed border-orange-100 md:border-none"><span class="md:hidden text-xs font-bold text-gray-400 uppercase">Trạng thái</span><div class="text-right md:text-left"><span class="${statusColor}">${displayStatus}</span>${borrowerInfo}</div></td><td class="p-3 md:p-4 flex flex-col md:table-cell border-b border-dashed border-orange-100 md:border-none gap-2"><span class="md:hidden text-xs font-bold text-gray-400 uppercase mb-1">Thao tác</span><div class="flex flex-col md:flex-row gap-2 justify-end md:justify-center w-full">${actionHTML}</div></td><td class="p-3 md:p-4 flex flex-col md:table-cell gap-2 bg-orange-50/50 md:bg-transparent rounded-b-2xl md:rounded-none"><span class="md:hidden text-xs font-bold text-gray-400 uppercase mb-1">Quản lý</span><div class="flex gap-2 justify-between md:justify-center w-full">${adminHTML}</div></td></tr>`;
+            });
+        }
+
+        function loadMaintenance() {
+            if(currentUser.role !== 'admin' && currentUser.role !== 'manager' && currentUser.role !== 'tech') return;
+            fetch('/api/maintenance').then(r => r.json()).then(data => {
+                const tbody = document.getElementById('maintenanceTableBody'); tbody.innerHTML = '';
+                if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-gray-500 font-medium">Không có yêu cầu bảo trì nào.</td></tr>'; return; }
+                data.forEach(item => {
+                    let badge = item.status === 'Hỏng' ? '<span class="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-lg text-xs font-bold">Chờ xử lý</span>' : '<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs font-bold">Đang sửa chữa</span>';
+                    
+                    let actions = `<button onclick="openChat('${item.qa_code}', 'general')" class="text-blue-500 hover:text-white bg-blue-50 hover:bg-blue-500 px-2 py-1.5 rounded transition mr-1" title="Ticket Sự Cố (Chat với người báo hỏng)"><i class="fa-solid fa-comments"></i></button>`;
+                    if (currentUser.role === 'tech' || currentUser.role === 'admin') { 
+                        actions += `<button onclick="openChat('${item.qa_code}', 'tech')" class="text-purple-500 hover:text-white bg-purple-50 hover:bg-purple-500 px-2 py-1.5 rounded transition mr-1" title="Chat Nội bộ (Chỉ Admin & Kỹ thuật)"><i class="fa-solid fa-user-shield"></i></button>`; 
+                    }
+
+                    if (currentUser.role === 'tech') {
+                        if (item.status === 'Hỏng') { actions += `<button onclick="markAsFixing('${item.qa_code}')" class="text-orange-500 hover:text-white bg-orange-50 hover:bg-orange-500 px-2 py-1.5 rounded transition mr-1" title="Tiếp nhận sửa"><i class="fa-solid fa-tools"></i> Tiếp nhận</button>`; } 
+                        else if (item.status === 'Bảo trì') { actions += `<button onclick="reportFixed('${item.qa_code}')" class="text-emerald-500 hover:text-white bg-emerald-50 hover:bg-emerald-500 px-2 py-1.5 rounded transition" title="Báo cáo Xong"><i class="fa-solid fa-flag-checkered"></i> Báo cáo Xong</button>`; }
+                    } else if (currentUser.role === 'admin') {
+                        if (item.status === 'Hỏng') { actions += `<button onclick="markAsFixing('${item.qa_code}')" class="text-orange-500 hover:text-white bg-orange-50 hover:bg-orange-500 px-2 py-1.5 rounded transition mr-1" title="Đang sửa"><i class="fa-solid fa-screwdriver-wrench"></i></button>`; }
+                        actions += `<button onclick="markAsFixed('${item.qa_code}')" class="text-emerald-500 hover:text-white bg-emerald-50 hover:bg-emerald-500 px-2 py-1.5 rounded transition" title="Xác nhận Xong"><i class="fa-solid fa-check-double"></i> Duyệt Xong</button>`;
+                    } else { actions += `<span class="text-xs text-red-500 font-semibold px-2 py-1 bg-red-50 rounded border border-red-200 ml-1">Đang theo dõi</span>`; }
+                    let timeStr = item.report_time ? new Date(item.report_time).toLocaleString('vi-VN', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit', year:'numeric'}) : '-';
+                    tbody.innerHTML += `<tr class="hover:bg-emerald-50/50 transition"><td class="p-4 border-b border-dashed border-emerald-100"><div class="font-bold text-emerald-600">${item.name}</div><div class="font-mono text-xs text-gray-500">${item.qa_code}</div></td><td class="p-4 border-b border-dashed border-emerald-100"><div class="font-medium text-gray-800">${item.reporter || '-'}</div><div class="text-[10px] text-gray-400 mt-1"><i class="fa-regular fa-calendar"></i> ${timeStr}</div></td><td class="p-4 border-b border-dashed border-emerald-100 text-sm text-gray-600 max-w-xs truncate" title="${item.error_note}">${item.error_note || '-'}</td><td class="p-4 border-b border-dashed border-emerald-100">${badge}</td><td class="p-4 border-b border-dashed border-emerald-100 text-center">${actions}</td></tr>`;
+                });
+            });
+        }
+        function reportFixed(qa_code) {
+            if(confirm('Bạn xác nhận đã sửa xong và muốn báo cáo với Admin để duyệt?')) {
+                socket.emit("sendMessage", { qa_code: qa_code + '_tech', sender: 'Hệ thống', role: 'system', message: `[Hệ thống] Nhân viên Kỹ thuật (${currentUser.username}) báo cáo đã khắc phục xong sự cố thiết bị. Yêu cầu Admin kiểm tra và xác nhận "Duyệt Xong" để thiết bị trở lại hoạt động.` });
+                alert('Đã gửi báo cáo cho Admin trong kênh Chat Kỹ thuật!');
+            }
+        }
+
+        function toggleNotif() { document.getElementById('notifDropdown').classList.toggle('hidden'); document.getElementById('notifBadge').innerText = '0'; document.getElementById('notifBadge').classList.add('hidden'); }
+        
+        function startScanner() { 
+            const readerDiv = document.getElementById('reader'); readerDiv.classList.remove('hidden'); 
+            if(!html5QrcodeScanner) { 
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false); 
+                html5QrcodeScanner.render((text) => { 
+                    document.getElementById('scanCode').value = text; html5QrcodeScanner.clear(); readerDiv.classList.add('hidden'); html5QrcodeScanner = null; 
+                    const foundAsset = allAssets.find(a => a.qa_code === text); if (foundAsset) showAssetDetails(text); else filterAssets(); 
+                }, () => {}); 
+            } 
+        }
+        function scanImage(event) { 
+            if (event.target.files.length == 0) return; 
+            new Html5Qrcode("reader").scanFile(event.target.files[0], true).then(text => { 
+                document.getElementById('scanCode').value = text; 
+                const foundAsset = allAssets.find(a => a.qa_code === text); if (foundAsset) showAssetDetails(text); else filterAssets(); 
+            }).catch(err => alert('Không đọc được mã QR!')); event.target.value = ''; 
+        }
+        
+        function filterAssets() { 
+            const term = document.getElementById('scanCode').value.toLowerCase(); 
+            const categoryFilterEl = document.getElementById('assetCategoryFilter');
+            const cat = categoryFilterEl ? categoryFilterEl.value : 'all';
+            
+            renderTable(allAssets.filter(item => {
+                const matchTerm = item.qa_code.toLowerCase().includes(term) || item.name.toLowerCase().includes(term);
+                const matchCat = cat === 'all' || item.type === cat;
+                return matchTerm && matchCat;
+            })); 
+        }
+        
+        function showAssetDetails(qa_code) { const item = allAssets.find(a => a.qa_code === qa_code); if(!item) return; document.getElementById('detQa').innerText = item.qa_code; document.getElementById('detName').innerText = item.name; document.getElementById('detTypeRoom').innerText = `${item.type} - ${item.room}`; let statusHtml = `<span class="font-bold ${item.status === 'Sẵn sàng' ? 'text-emerald-600' : (item.status === 'Đang sử dụng' ? 'text-blue-600' : 'text-red-600')}">${item.status}</span>`; if (item.status === 'Đang sử dụng' && item.current_borrower) statusHtml += ` <span class="text-gray-500 font-normal">(Mượn: ${item.current_borrower})</span>`; document.getElementById('detStatus').innerHTML = statusHtml; document.getElementById('detNote').innerText = item.borrow_note || "Chưa có ghi chú"; document.getElementById('detQRCode').innerHTML = ''; new QRCode(document.getElementById('detQRCode'), { text: qa_code, width: 140, height: 140, colorDark : "#F26F21", colorLight : "#ffffff" }); document.getElementById('detQRCode').setAttribute('data-qa', qa_code); document.getElementById('detailModal').classList.remove('hidden'); }
+        function downloadQR() { const qrImg = document.querySelector('#detQRCode img'); if (!qrImg) return; const qa_code = document.getElementById('detQRCode').getAttribute('data-qa'); const a = document.createElement('a'); a.href = qrImg.src; a.download = `QR_${qa_code}.png`; a.click(); }
+        function printQR() { const qrImg = document.querySelector('#detQRCode img'); if (!qrImg) return; const qa_code = document.getElementById('detQRCode').getAttribute('data-qa'); const win = window.open(''); win.document.write(`<html><body style="text-align:center; padding: 40px; font-family: sans-serif;"><h2 style="color: #F26F21; font-size: 24px; margin-bottom: 10px;">${qa_code}</h2><img src="${qrImg.src}" style="width:200px; height:200px; border: 1px solid #ccc; padding: 10px; border-radius: 10px;"/><script>setTimeout(() => { window.print(); window.close(); }, 500);<\/script></body></html>`); }
+        
+        function loadAssets() { fetch('/api/assets').then(r => r.json()).then(data => { allAssets = data; loadAssetCategories(); filterAssets(); updateNotificationsUI(); loadMaintenance(); }); }
+        
+        function loadAssetCategories() {
+            fetch('/api/categories').then(r => r.json()).then(cats => {
+                let options = '<option value="all">Tất cả danh mục</option>';
+                cats.forEach(c => options += `<option value="${c}">${c}</option>`);
+                const filterEl = document.getElementById('assetCategoryFilter');
+                if(filterEl) filterEl.innerHTML = options;
+            });
+        }
+        
+        function loadUsers() { 
+            fetch(`/api/users?requester_id=${currentUser.id}&requester_role=${currentUser.role}`).then(r => r.json()).then(data => { 
+                const tbody = document.getElementById('userTableBody'); if(!tbody) return; tbody.innerHTML = ''; 
+                data.forEach(user => { 
+                    let roleBadge = '<span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">Nhân viên</span>'; 
+                    if(user.role === 'admin') roleBadge = '<span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs">Admin</span>'; 
+                    if(user.role === 'manager') roleBadge = '<span class="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs">Tổ trưởng</span>'; 
+                    if(user.role === 'tech') roleBadge = '<span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs">Kỹ thuật</span>'; 
+                    
+                    let actionBtns = '';
+                    if(currentUser.role === 'admin') {
+                        actionBtns += `<button onclick="openEditUser(${user.id}, '${user.username}', '${user.role}', '${user.department || ''}')" class="text-blue-500 hover:text-white bg-blue-50 hover:bg-blue-500 px-3 py-1.5 rounded mr-1" title="Cập nhật Quyền"><i class="fa-solid fa-pen"></i></button>`;
+                    }
+                    actionBtns += `<button onclick="deleteUser(${user.id})" class="text-red-500 hover:text-white bg-red-50 hover:bg-red-500 px-3 py-1.5 rounded" title="Xóa Tài khoản"><i class="fa-solid fa-trash"></i></button>`;
+                    
+                    tbody.innerHTML += `<tr><td class="p-4 border-b border-orange-100">${user.id}</td><td class="p-4 border-b border-orange-100 font-bold text-gray-700">${user.username}</td><td class="p-4 border-b border-orange-100">${roleBadge}</td><td class="p-4 border-b border-orange-100">${user.department || '-'}</td><td class="p-4 border-b border-orange-100 text-center whitespace-nowrap">${actionBtns}</td></tr>`; 
+                }); 
+            }).catch(e => console.log(e)); 
+        }
+        function logout() { localStorage.removeItem('currentUser'); window.location.href = '/login'; }
+
+        function openActionModal(qa_code, action_type) {
+            document.getElementById('actionQaCode').value = qa_code; document.getElementById('actionType').value = action_type; document.getElementById('actionNote').value = ''; document.getElementById('actionNewRoom').value = '';
+            const titleEl = document.getElementById('actionModalTitle'); const descEl = document.getElementById('actionModalDesc'); const btnEl = document.getElementById('btnSubmitAction'); const roomInput = document.getElementById('actionNewRoom'); const dateContainer = document.getElementById('expectedReturnContainer');
+            if(action_type === 'Mượn' || action_type === 'Đăng ký mượn') {
+                titleEl.innerText = action_type === 'Mượn' ? 'Mượn thiết bị' : 'Đăng ký mượn'; descEl.innerText = `Mã QA: ${qa_code}. Vui lòng nhập ghi chú.`;
+                btnEl.className = 'w-full bg-blue-500 text-white p-3 rounded-xl font-bold shadow-md'; roomInput.classList.remove('hidden'); dateContainer.classList.remove('hidden');
+                let defaultDate = new Date(); defaultDate.setDate(defaultDate.getDate() + 3); document.getElementById('actionExpectedReturn').value = (new Date(defaultDate - (defaultDate.getTimezoneOffset() * 60000))).toISOString().slice(0, 16);
+            } else if (action_type === 'Trả') {
+                titleEl.innerText = 'Trả thiết bị'; descEl.innerText = `Xác nhận trả ${qa_code}?`;
+                btnEl.className = 'w-full bg-emerald-500 text-white p-3 rounded-xl font-bold shadow-md'; roomInput.classList.add('hidden'); dateContainer.classList.add('hidden');
+            } else {
+                titleEl.innerText = 'Báo lỗi'; descEl.innerText = `Xác nhận báo lỗi ${qa_code}?`;
+                btnEl.className = 'w-full bg-red-500 text-white p-3 rounded-xl font-bold shadow-md'; roomInput.classList.add('hidden'); dateContainer.classList.add('hidden');
+            }
+            document.getElementById('actionModal').classList.remove('hidden');
+        }
+
+        function submitAction() {
+            const data = { qa_code: document.getElementById('actionQaCode').value, username: currentUser.username, role: currentUser.role, action_type: document.getElementById('actionType').value, note: document.getElementById('actionNote').value, new_room: document.getElementById('actionNewRoom').value, expected_return: document.getElementById('actionExpectedReturn').value };
+            if((data.action_type === 'Mượn' || data.action_type === 'Đăng ký mượn') && data.note.trim() === '') return alert('Vui lòng nhập ghi chú!');
+            fetch('/api/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()).then(res => { if(res.success) { document.getElementById('actionModal').classList.add('hidden'); loadAssets(); if(currentUser.role === 'admin') loadDashboard(); } else alert('Lỗi: ' + res.message); });
+        }
+
+        function approveRequest(qa_code, decision) { if(confirm(`Xác nhận Duyệt / Từ chối?`)) { fetch('/api/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ qa_code, admin_username: currentUser.username, decision }) }).then(r => r.json()).then(res => { if(res.success) { loadAssets(); if(currentUser.role === 'admin') loadDashboard(); } else alert('Lỗi: ' + res.message); }); } }
+        function markAsFixing(qa_code) { if(confirm(`Xác nhận đang sửa thiết bị này?`)) { const item = allAssets.find(a=>a.qa_code===qa_code); fetch(`/api/assets/${qa_code}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: item.name, type: item.type, room: item.room, status: 'Bảo trì' }) }).then(r => r.json()).then(res => { if(res.success) { loadAssets(); if(currentUser.role === 'admin') loadDashboard(); } else alert('Lỗi: ' + res.error); }); } }
+        function markAsFixed(qa_code) { if(confirm(`Xác nhận duyệt thiết bị đã sửa xong và cho phép tiếp tục hoạt động?`)) { fetch(`/api/assets/${qa_code}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: allAssets.find(a=>a.qa_code===qa_code).name, type: allAssets.find(a=>a.qa_code===qa_code).type, room: allAssets.find(a=>a.qa_code===qa_code).room, status: 'Sẵn sàng' }) }).then(r => r.json()).then(res => { if(res.success) { loadAssets(); if(currentUser.role === 'admin') loadDashboard(); } else alert('Lỗi: ' + res.error); }); } }
+
+        function loadDashboard() {
+            fetch('/api/dashboard?role=' + currentUser.role).then(r => r.json()).then(data => {
+                document.getElementById('dashTotal').innerText = data.total || 0; document.getElementById('dashInUse').innerText = data.in_use || 0; document.getElementById('dashBroken').innerText = data.broken || 0;
+                renderChart(data.in_use || 0, data.broken || 0, data.total || 0);
+            });
+            fetch('/api/history?role=' + currentUser.role).then(r => r.json()).then(data => {
+                historyData = data;
+                filterStats(); 
+            });
+        }
+
+        function filterStats() {
+            let filteredHistory = historyData.filter(h => h.action_type === 'Mượn');
+            const assetCounts = {};
+            const userCounts = {};
+            filteredHistory.forEach(h => {
+                assetCounts[h.qa_code] = (assetCounts[h.qa_code] || 0) + 1;
+                userCounts[h.username] = (userCounts[h.username] || 0) + 1;
+            });
+            const topAssets = Object.keys(assetCounts).map(k => ({ code: k, count: assetCounts[k] })).sort((a,b) => b.count - a.count).slice(0, 5);
+            const topUsers = Object.keys(userCounts).map(k => ({ user: k, count: userCounts[k] })).sort((a,b) => b.count - a.count).slice(0, 5);
+            
+            const aList = document.getElementById('topAssetsList');
+            if (topAssets.length === 0) {
+                aList.innerHTML = '<div class="text-center text-gray-400 text-sm py-4 italic">Chưa có dữ liệu mượn phù hợp.</div>';
+            } else {
+                aList.innerHTML = '';
+                topAssets.forEach(a => {
+                    const info = allAssets.find(x => x.qa_code === a.code);
+                    const displayName = info ? info.name : a.code;
+                    aList.innerHTML += `
+                        <div class="flex justify-between items-center bg-orange-50 hover:bg-orange-100 transition p-3 rounded-xl border border-orange-100">
+                            <div class="font-medium text-sm text-gray-800">${displayName} <br><span class="text-xs text-gray-500 font-mono">${a.code}</span></div>
+                            <div class="bg-white text-orange-600 border border-orange-200 font-bold px-3 py-1.5 rounded-full text-xs shadow-sm">${a.count} lần</div>
+                        </div>`;
+                });
+            }
+
+            const uList = document.getElementById('topUsersList');
+            if (topUsers.length === 0) {
+                uList.innerHTML = '<div class="text-center text-gray-400 text-sm py-4 italic">Chưa có dữ liệu người mượn.</div>';
+            } else {
+                uList.innerHTML = '';
+                topUsers.forEach(u => {
+                    uList.innerHTML += `
+                        <div class="flex justify-between items-center bg-blue-50 hover:bg-blue-100 transition p-3 rounded-xl border border-blue-100">
+                            <div class="font-bold text-sm text-gray-800"><i class="fa-solid fa-circle-user text-blue-400 text-lg mr-2 align-middle"></i>${u.user}</div>
+                            <div class="bg-white text-blue-600 border border-blue-200 font-bold px-3 py-1.5 rounded-full text-xs shadow-sm">${u.count} lần mượn</div>
+                        </div>`;
+                });
+            }
+        }
+        
+        function renderChart(inUse, broken, total) {
+            const available = total - inUse - broken; const ctx = document.getElementById('statusChart').getContext('2d');
+            if(statusChartInstance) statusChartInstance.destroy();
+            statusChartInstance = new Chart(ctx, { type: 'doughnut', data: { labels: ['Sẵn sàng', 'Đang sử dụng', 'Hỏng/Bảo trì'], datasets: [{ data: [available, inUse, broken], backgroundColor: ['#10b981', '#3b82f6', '#ef4444'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: {size: 10} } } } } });
+        }
+
+        function exportHistoryExcel() { 
+            if(currentUser.role !== 'admin') return alert('Chỉ Admin mới có quyền trích xuất dữ liệu!');
+            fetch('/api/history?role=' + currentUser.role).then(res => res.json()).then(data => {
+                if(!data || data.length === 0) return alert('Không có dữ liệu giao dịch trong 30 ngày qua!');
+                const excelData = data.map(item => ({ "ID Lịch sử": item.id, "Ngày thực hiện": new Date(item.timestamp).toLocaleString('vi-VN'), "Mã QA": item.qa_code, "Người thực hiện": item.username, "Thao tác": item.action_type, "Ghi chú / Lý do lỗi": item.note || 'Không có', "Hạn trả dự kiến": item.expected_return ? new Date(item.expected_return).toLocaleString('vi-VN') : 'N/A' }));
+                const worksheet = XLSX.utils.json_to_sheet(excelData); const wscols = [ {wch:10}, {wch:20}, {wch:15}, {wch:15}, {wch:15}, {wch:35}, {wch:20} ]; worksheet['!cols'] = wscols; const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, worksheet, "LichSu_30Ngay"); XLSX.writeFile(workbook, `Lich_Su_Thiet_Bi_${new Date().toISOString().split('T')[0]}.xlsx`);
+            }).catch(err => { console.error(err); alert('Lỗi trong quá trình trích xuất Excel!'); });
+        }
+
+        // HÀM XUẤT PDF LỊCH SỬ DẠNG BẢNG (Giống Excel)
+        function exportPDF() { 
+            if(currentUser.role !== 'admin') return alert('Chỉ Admin mới có quyền trích xuất dữ liệu!');
+            
+            fetch('/api/history?role=' + currentUser.role).then(res => res.json()).then(data => {
+                if(!data || data.length === 0) return alert('Không có dữ liệu giao dịch trong 30 ngày qua!');
+
+                // Tạo một bảng HTML ảo (ẩn) để cấu trúc dữ liệu PDF
+                const tempContainer = document.createElement('div');
+                tempContainer.style.padding = '20px';
+                tempContainer.style.fontFamily = 'sans-serif';
+                tempContainer.style.color = '#333';
+
+                let html = `
+                    <h2 style="text-align: center; color: #F26F21; margin-bottom: 20px; font-size: 18px;">LỊCH SỬ GIAO DỊCH THIẾT BỊ (30 NGÀY)</h2>
+                    <p style="text-align: right; font-size: 12px; margin-bottom: 10px;">Ngày xuất: ${new Date().toLocaleDateString('vi-VN')}</p>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+                        <thead>
+                            <tr style="background-color: #f97316; color: white;">
+                                <th style="border: 1px solid #ddd; padding: 8px;">ID</th>
+                                <th style="border: 1px solid #ddd; padding: 8px;">Ngày TH</th>
+                                <th style="border: 1px solid #ddd; padding: 8px;">Mã QA</th>
+                                <th style="border: 1px solid #ddd; padding: 8px;">Người TH</th>
+                                <th style="border: 1px solid #ddd; padding: 8px;">Thao tác</th>
+                                <th style="border: 1px solid #ddd; padding: 8px;">Ghi chú</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                data.forEach((item, index) => {
+                    const bg = index % 2 === 0 ? '#fff' : '#fff7ed';
+                    html += `
+                        <tr style="background-color: ${bg};">
+                            <td style="border: 1px solid #ddd; padding: 8px;">${item.id}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${new Date(item.timestamp).toLocaleString('vi-VN')}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; font-family: monospace;">${item.qa_code}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${item.username}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${item.action_type}</td>
+                            <td style="border: 1px solid #ddd; padding: 8px;">${item.note || ''}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table>`;
+                tempContainer.innerHTML = html;
+
+                // Cấu hình html2pdf
+                const opt = {
+                    margin:       10,
+                    filename:     `Lich_Su_Thiet_Bi_${new Date().toISOString().split('T')[0]}.pdf`,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2 },
+                    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                
+                // Đổi trạng thái button UI
+                const btn = document.getElementById('btnExportPdf');
+                const oldText = btn.innerHTML;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xuất...';
+                btn.disabled = true;
+
+                // Xuất file từ element HTML ảo (không hiển thị lên màn hình thực)
+                html2pdf().set(opt).from(tempContainer).save().then(() => {
+                    btn.innerHTML = oldText;
+                    btn.disabled = false;
+                });
+
+            }).catch(err => { console.error(err); alert('Lỗi trong quá trình trích xuất PDF!'); });
+        }
+
+        function addAsset() { const data = { qa_code: document.getElementById('newQa').value, name: document.getElementById('newName').value, type: document.getElementById('newType').value, room: document.getElementById('newRoom').value, status: 'Sẵn sàng' }; fetch('/api/assets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()).then(res => { if(res.success) { document.getElementById('addModal').classList.add('hidden'); loadAssets(); if(currentUser.role === 'admin') loadDashboard(); } else alert('Lỗi: ' + res.error); }); }
+        function openEdit(qa_code) { const item = allAssets.find(a => a.qa_code === qa_code); if(item) { document.getElementById('editQa').value = item.qa_code; document.getElementById('editName').value = item.name; document.getElementById('editType').value = item.type; document.getElementById('editRoom').value = item.room; document.getElementById('editStatus').value = item.status; document.getElementById('editModal').classList.remove('hidden'); } }
+        function saveEdit() { const qa_code = document.getElementById('editQa').value; const data = { name: document.getElementById('editName').value, type: document.getElementById('editType').value, room: document.getElementById('editRoom').value, status: document.getElementById('editStatus').value }; fetch(`/api/assets/${qa_code}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()).then(res => { if(res.success) { document.getElementById('editModal').classList.add('hidden'); loadAssets(); if(currentUser.role === 'admin') loadDashboard(); } else alert('Lỗi: ' + res.error); }); }
+        function deleteAsset(qa_code) { if(confirm(`Xác nhận xóa thiết bị?`)) fetch(`/api/assets/${qa_code}`, { method: 'DELETE' }).then(r => r.json()).then(res => { if(res.success) { loadAssets(); if(currentUser.role === 'admin') loadDashboard(); }}); }
+        function addUser() { const data = { username: document.getElementById('newUsername').value, password: document.getElementById('newPassword').value, role: document.getElementById('newRole').value, department: document.getElementById('newDepartment').value, requester_id: currentUser.id, requester_role: currentUser.role }; if(!data.username || !data.password) return alert("Vui lòng nhập đủ thông tin!"); fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then(r => r.json()).then(res => { if(res.success) { document.getElementById('addUserModal').classList.add('hidden'); loadUsers(); } else alert("Lỗi: " + res.error); }); }
+        function deleteUser(id) { if(confirm("Xác nhận xóa tài khoản?")) { fetch('/api/users/' + id, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requester_id: currentUser.id, requester_role: currentUser.role }) }).then(r => r.json()).then(data => { if(data.success) loadUsers(); else alert("Lỗi: " + data.error); }); } }
+
+        function openEditUser(id, username, role, dept) {
+            document.getElementById('editUserId').value = id;
+            document.getElementById('editUserUsername').value = username;
+            document.getElementById('editUserRole').value = role;
+            document.getElementById('editUserDepartment').value = dept === 'null' ? '' : dept;
+            document.getElementById('editUserDeptContainer').style.display = role === 'admin' ? 'none' : 'block';
+            document.getElementById('editUserModal').classList.remove('hidden');
+        }
+
+        function saveEditUser() {
+            const id = document.getElementById('editUserId').value;
+            const data = {
+                role: document.getElementById('editUserRole').value,
+                department: document.getElementById('editUserDepartment').value,
+                requester_role: currentUser.role
+            };
+            fetch('/api/users/' + id, { 
+                method: 'PUT', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify(data) 
+            }).then(r => r.json()).then(res => { 
+                if(res.success) { 
+                    document.getElementById('editUserModal').classList.add('hidden'); 
+                    
+                    if (id == currentUser.id) {
+                        currentUser.role = data.role;
+                        currentUser.department = data.department;
+                        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                        window.location.reload(); 
+                    } else {
+                        loadUsers(); 
+                    }
+                } else alert("Lỗi: " + res.error); 
+            });
+        }
+
+        function setupNotifications() {
+            if (checkNotificationInterval) clearInterval(checkNotificationInterval);
+            checkNotificationInterval = setInterval(() => {
+                if(!allAssets || allAssets.length === 0) return; const now = new Date().getTime();
+                allAssets.forEach(item => {
+                    if(item.status === 'Đang sử dụng' && item.current_borrower === currentUser.username && item.expected_return) {
+                        const diffMins = (new Date(item.expected_return).getTime() - now) / (1000 * 60);
+                        if (diffMins > 0 && diffMins <= 15 && !notifiedAssets.has(item.qa_code)) { alert(`⏳ Cảnh báo: Thiết bị "${item.name}" sắp đến hạn trả!`); notifiedAssets.add(item.qa_code); }
+                    }
+                });
+            }, 60000); 
+        }
+
+        function updateNotificationsUI() {
+            const notifList = document.getElementById('notifList'); const notifBadge = document.getElementById('notifBadge');
+            let notifications = []; const now = new Date().getTime();
+            allAssets.forEach(item => {
+                if(item.status === 'Đang sử dụng' && item.current_borrower === currentUser.username && item.expected_return) {
+                    const diffMins = (new Date(item.expected_return).getTime() - now) / (1000 * 60);
+                    if (diffMins < 0) notifications.push(`<div class="p-2 bg-red-50 rounded text-xs border border-red-100"><i class="fa-solid fa-triangle-exclamation text-red-500 mr-1"></i> <b>${item.qa_code}</b> đã quá hạn trả!</div>`);
+                    else if (diffMins <= 15) notifications.push(`<div class="p-2 bg-orange-50 rounded text-xs border border-orange-100"><i class="fa-solid fa-clock text-orange-500 mr-1"></i> <b>${item.qa_code}</b> sắp đến hạn trả.</div>`);
+                }
+                if(item.status === 'Chờ duyệt' && (currentUser.role === 'admin' || currentUser.role === 'manager')) { notifications.push(`<div class="p-2 bg-blue-50 rounded text-xs border border-blue-100"><i class="fa-solid fa-clipboard-user text-blue-500 mr-1"></i> <b>${item.qa_code}</b> có yêu cầu cần duyệt.</div>`); }
+                if(item.status === 'Hỏng' || item.status === 'Bảo trì') {
+                    if (currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'tech') { notifications.push(`<div onclick="openChat('${item.qa_code}', 'general')" class="p-2 bg-red-50 cursor-pointer rounded text-xs border border-red-100 hover:bg-red-100"><i class="fa-solid fa-wrench text-red-500 mr-1"></i> Thiết bị <b>${item.qa_code}</b> đang báo lỗi!</div>`); } 
+                    else if (item.current_borrower === currentUser.username) { notifications.push(`<div onclick="openChat('${item.qa_code}', 'general')" class="p-2 bg-red-50 cursor-pointer rounded text-xs border border-red-100 hover:bg-red-100"><i class="fa-solid fa-wrench text-red-500 mr-1"></i> Thiết bị <b>${item.qa_code}</b> bạn mượn bị báo lỗi!</div>`); }
+                }
+            });
+            if (notifications.length > 0) { notifBadge.innerText = notifications.length; notifBadge.classList.remove('hidden'); notifList.innerHTML = notifications.join(''); } 
+            else { notifBadge.classList.add('hidden'); notifList.innerHTML = '<div class="p-4 text-center text-gray-400 text-xs">Không có thông báo mới.</div>'; }
+        }
+    </script>
+</body>
+</html>
